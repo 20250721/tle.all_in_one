@@ -1,29 +1,84 @@
 name: 定时下载并合并文本文件
 
-# 触发条件：每30分钟 + 手动触发（方便测试）
 on:
   schedule:
-    # cron表达式：分 时 日 月 周，*/30表示每30分钟
     - cron: '*/30 * * * *'
-  workflow_dispatch: # 手动触发按钮
-permissions:
-  contents: write # 授予内容写入权限
+  workflow_dispatch:
 
-# 工作任务定义
 jobs:
   download-and-merge:
-    runs-on: ubuntu-latest # 使用Ubuntu系统的运行环境
+    runs-on: ubuntu-latest
+    # 授予写入权限，避免推送失败
+    permissions:
+      contents: write
     steps:
-      # 步骤1：检出仓库代码（否则无法提交文件）
       - name: 检出仓库代码
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # 拉取完整历史，避免提交失败
+          fetch-depth: 0
 
-      # 步骤2：定义要下载的URL列表，下载并生成合法文件名
-      - name: 下载多个文本文件
+      - name: 初始化下载目录
+        run: |
+          # 创建统一的下载目录
+          mkdir -p downloaded_files
+          # 确保unzip工具已安装（Ubuntu默认有，兜底处理）
+          sudo apt-get update && sudo apt-get install -y unzip
+
+      - name: 下载并解压指定ZIP文件
         env:
-          # 在这里添加/修改你要下载的URL，每行一个
+          # 定义需要下载的ZIP文件URL列表
+          ZIP_URL_LIST: |
+            https://www.mmccants.org/tles/classfd.zip
+            https://www.mmccants.org/tles/inttles.zip
+        run: |
+          # 循环处理每个ZIP URL
+          for zip_url in $ZIP_URL_LIST; do
+            # 1. 生成ZIP文件对应的本地保存名
+            zip_filename=$(echo "$zip_url" | sed -e 's/[\/\?\&=:]/_/g' -e 's/__*/_/g' -e 's/_$//').zip
+            zip_save_path="downloaded_files/$zip_filename"
+            
+            # 2. 下载ZIP文件
+            echo "正在下载ZIP: $zip_url -> $zip_save_path"
+            if wget -q -O "$zip_save_path" "$zip_url"; then
+              echo "ZIP下载成功: $zip_filename"
+              
+              # 3. 解压ZIP文件到临时目录（避免和其他文件冲突）
+              unzip_temp_dir="downloaded_files/zip_temp_$(date +%s)"
+              mkdir -p "$unzip_temp_dir"
+              if unzip -q "$zip_save_path" -d "$unzip_temp_dir"; then
+                echo "ZIP解压成功: $zip_filename"
+                
+                # 4. 生成对应URL的TXT文件名（和原有逻辑一致）
+                txt_filename=$(echo "$zip_url" | sed -e 's/[\/\?\&=:]/_/g' -e 's/__*/_/g' -e 's/_$//').txt
+                txt_save_path="downloaded_files/$txt_filename"
+                
+                # 5. 将解压后的所有文件内容合并到该TXT文件
+                > "$txt_save_path" # 清空目标TXT
+                for unzipped_file in "$unzip_temp_dir"/*; do
+                  if [ -f "$unzipped_file" ]; then
+                    cat "$unzipped_file" >> "$txt_save_path"
+                    echo -e "\n" >> "$txt_save_path" # 解压文件间加空行分隔
+                  fi
+                done
+                echo "解压内容已写入: $txt_filename"
+                
+                # 清理临时文件
+                rm -rf "$unzip_temp_dir"
+                rm -f "$zip_save_path" # 删除已解压的ZIP文件
+              else
+                echo "ZIP解压失败，跳过: $zip_url"
+                rm -rf "$unzip_temp_dir"
+                rm -f "$zip_save_path"
+              fi
+            else
+              echo "ZIP下载失败，跳过: $zip_url"
+              rm -f "$zip_save_path"
+            fi
+          done
+
+      - name: 下载多个文本URL文件
+        env:
+          # 在这里修改你要下载的文本URL列表
           URL_LIST: |
             https://r4uab.ru/satonline.txt
             https://amsat.org/tle/current/nasabare.txt
@@ -52,50 +107,40 @@ jobs:
             https://celestrak.org/NORAD/elements/gp.php?GROUP=x-comm&FORMAT=tle
             https://amsat.org/tle/current/nasabare.txt
             https://r4uab.ru/satonline.txt
-            
         run: |
-          # 创建临时目录存放下载的文件（避免和仓库文件冲突）
-          mkdir -p downloaded_files
-          
-          # 循环处理每个URL
+          # 循环处理每个文本URL（原有逻辑保留）
           for url in $URL_LIST; do
-            # 将URL中的特殊字符（/、?、&、=等）替换为下划线，生成合法文件名
             filename=$(echo "$url" | sed -e 's/[\/\?\&=:]/_/g' -e 's/__*/_/g' -e 's/_$//').txt
-            
-            # 下载URL内容到指定文件，失败时跳过该URL（避免整个流程中断）
-            echo "正在下载: $url -> $filename"
+            echo "正在下载文本: $url -> $filename"
             if wget -q -O "downloaded_files/$filename" "$url"; then
-              echo "下载成功: $filename"
+              echo "文本下载成功: $filename"
             else
-              echo "下载失败，跳过: $url"
-              rm -f "downloaded_files/$filename" # 删除空文件
+              echo "文本下载失败，跳过: $url"
+              rm -f "downloaded_files/$filename"
             fi
           done
 
-      # 步骤3：合并所有下载的文件到allinone.txt
-      - name: 合并文件到allinone.txt
+      - name: 合并所有文件到allinone.txt
         run: |
-          # 清空旧的allinone.txt（如果存在）
+          # 清空旧文件，仅保留纯内容
           > allinone.txt
           
-          
-          # 循环合并每个下载的文件，添加分隔符便于区分
+          # 合并downloaded_files下所有TXT文件（包括ZIP解压生成的和直接下载的）
           for file in downloaded_files/*.txt; do
-            if [ -f "$file" ]; then # 确保文件存在
+            if [ -f "$file" ]; then
               cat "$file" >> allinone.txt
+              # 可选：如需文件间加空行分隔，取消下面注释
+              # echo -e "\n" >> allinone.txt
             fi
           done
           
-          # 删除临时目录（可选，避免提交无关文件）
+          # 清理临时目录
           rm -rf downloaded_files
 
-      # 步骤4：替换为你指定的提交方式
       - name: Commit and push changes
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          
-          # 检查allinone.txt是否有变更，避免空提交
           if git status --porcelain | grep -q "allinone.txt"; then
             git add allinone.txt
             git commit -m "Update allinone.txt: $(date +'%Y-%m-%d %H:%M:%S')"
@@ -106,6 +151,3 @@ jobs:
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-
-
