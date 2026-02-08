@@ -25,8 +25,8 @@ jobs:
         env:
           # 在这里添加/修改你要下载的URL，每行一个
           URL_LIST: |
-            https://tle.486520.xyz/https://r4uab.ru/satonline.txt
-            https://tle.486520.xyz/https://amsat.org/tle/current/nasabare.txt
+            https://r4uab.ru/satonline.txt
+            https://amsat.org/tle/current/nasabare.txt
         run: |
           # 创建临时目录存放下载的文件（避免和仓库文件冲突）
           mkdir -p downloaded_files
@@ -52,16 +52,11 @@ jobs:
           # 清空旧的allinone.txt（如果存在）
           > allinone.txt
           
-          # 写入合并说明（可选，方便查看）
-          echo "===== 合并时间: $(date '+%Y-%m-%d %H:%M:%S') =====" >> allinone.txt
-          echo "" >> allinone.txt
           
           # 循环合并每个下载的文件，添加分隔符便于区分
           for file in downloaded_files/*.txt; do
             if [ -f "$file" ]; then # 确保文件存在
-              echo "===== 来源文件: $(basename "$file") =====" >> allinone.txt
               cat "$file" >> allinone.txt
-              echo -e "\n\n" >> allinone.txt # 每个文件内容后加空行分隔
             fi
           done
           
