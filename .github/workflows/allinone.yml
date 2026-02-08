@@ -23,9 +23,8 @@ jobs:
         env:
           # 在这里添加/修改你要下载的URL，每行一个
           URL_LIST: |
-            https://tle.486520.xyz/https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle
-            https://tle.486520.xyz/https://amsat.org/tle/current/nasabare.txt
             https://tle.486520.xyz/https://r4uab.ru/satonline.txt
+            https://tle.486520.xyz/https://amsat.org/tle/current/nasabare.txt
         run: |
           # 创建临时目录存放下载的文件（避免和仓库文件冲突）
           mkdir -p downloaded_files
@@ -67,25 +66,20 @@ jobs:
           # 删除临时目录（可选，避免提交无关文件）
           rm -rf downloaded_files
 
-      # 步骤4：提交并推送allinone.txt到仓库
-      - name: 提交并推送文件
-        env:
-          # 设置git提交的用户信息（GitHub Action需要）
-          GITHUB_USER: ${{ github.actor }}
-          GITHUB_EMAIL: ${{ github.actor }}@users.noreply.github.com
+      # 步骤4：替换为你指定的提交方式
+      - name: Commit and push changes
         run: |
-          # 配置git用户
-          git config --global user.name "$GITHUB_USER"
-          git config --global user.email "$GITHUB_EMAIL"
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
           
-          # 检查文件是否有变化（避免空提交）
+          # 检查allinone.txt是否有变更，避免空提交
           if git status --porcelain | grep -q "allinone.txt"; then
-            # 提交文件
             git add allinone.txt
-            git commit -m "自动更新：合并下载的文本文件 $(date '+%Y-%m-%d %H:%M:%S')"
-            # 推送提交到仓库
-            git push origin main # 如果你的主分支是master，替换为master
-            echo "文件已成功提交并推送"
+            git commit -m "Update allinone.txt: $(date +'%Y-%m-%d %H:%M:%S')"
+            git push
+            echo "Successfully pushed allinone.txt to repository"
           else
-            echo "文件无变化，无需提交"
+            echo "No changes to allinone.txt, skip commit"
           fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
