@@ -27,6 +27,32 @@ jobs:
           URL_LIST: |
             https://r4uab.ru/satonline.txt
             https://amsat.org/tle/current/nasabare.txt
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=cubesat&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=education&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=engineering&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=geo&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=globalstar&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=gnss&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=intelsat&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=iridium-NEXT&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=military&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=last-30-days&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=oneweb&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=orbcomm&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=resource&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=satnogs&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=science&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=spire&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=swarm&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle
+            https://celestrak.org/NORAD/elements/gp.php?GROUP=x-comm&FORMAT=tle
+            https://amsat.org/tle/current/nasabare.txt
+            https://r4uab.ru/satonline.txt
+            
         run: |
           # 创建临时目录存放下载的文件（避免和仓库文件冲突）
           mkdir -p downloaded_files
@@ -80,3 +106,6 @@ jobs:
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
+
