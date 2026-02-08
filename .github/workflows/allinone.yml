@@ -1,98 +1,91 @@
-name: Download and Allinone
+name: 定时下载并合并文本文件
 
+# 触发条件：每30分钟 + 手动触发（方便测试）
 on:
   schedule:
-    # 每30分钟触发一次（GitHub cron有±1分钟延迟）
+    # cron表达式：分 时 日 月 周，*/30表示每30分钟
     - cron: '*/30 * * * *'
-  workflow_dispatch: # 手动触发，方便测试
+  workflow_dispatch: # 手动触发按钮
 
+# 工作任务定义
 jobs:
-  download-merge-push:
-    runs-on: ubuntu-latest
+  download-and-merge:
+    runs-on: ubuntu-latest # 使用Ubuntu系统的运行环境
     steps:
-      - name: Checkout repository
+      # 步骤1：检出仓库代码（否则无法提交文件）
+      - name: 检出仓库代码
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 拉取完整历史，避免提交失败
 
-      - name: Download files with valid filenames
+      # 步骤2：定义要下载的URL列表，下载并生成合法文件名
+      - name: 下载多个文本文件
+        env:
+          # 在这里添加/修改你要下载的URL，每行一个
+          URL_LIST: |
+            https://tle.486520.xyz/https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle
+            https://tle.486520.xyz/https://amsat.org/tle/current/nasabare.txt
+            https://tle.486520.xyz/https://r4uab.ru/satonline.txt
         run: |
-          # 定义要下载的URL列表（可自行扩展，支持任意文本类型URL）
-          URLS=(
-            "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=cubesat&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=education&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=engineering&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=geo&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=globalstar&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=gnss&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=intelsat&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=iridium-NEXT&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=military&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=last-30-days&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=oneweb&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=orbcomm&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=resource&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=satnogs&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=science&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=spire&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=swarm&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle",
-			"https://celestrak.org/NORAD/elements/gp.php?GROUP=x-comm&FORMAT=tle",
-			"https://amsat.org/tle/current/nasabare.txt",
-			"https://r4uab.ru/satonline.txt",
-          )
+          # 创建临时目录存放下载的文件（避免和仓库文件冲突）
+          mkdir -p downloaded_files
           
-          # 循环处理每个URL：生成合法文件名 → 下载文件
-          for url in "${URLS[@]}"; do
-            echo "Processing URL: $url"
+          # 循环处理每个URL
+          for url in $URL_LIST; do
+            # 将URL中的特殊字符（/、?、&、=等）替换为下划线，生成合法文件名
+            filename=$(echo "$url" | sed -e 's/[\/\?\&=:]/_/g' -e 's/__*/_/g' -e 's/_$//').txt
             
-            # 生成合法文件名：
-            # 1. 替换URL中的特殊字符（/、?、&、=、:等）为下划线
-            # 2. 末尾统一添加.txt后缀，确保是文本文件
-            filename=$(echo "$url" | sed -e 's/[\/\?\&\=\:\.]/_/g' -e 's/_\+/_/g' -e 's/^_//' -e 's/_$//').txt
-            
-            # 下载文件（失败重试3次，静默模式）
-            echo "Downloading to filename: $filename"
-            wget --quiet --tries=3 --output-document="$filename" "$url" || {
-              echo "Warning: Failed to download $url (saved to $filename)"
-              # 即使下载失败，也创建空文件避免后续合并报错
-              touch "$filename"
-              echo "Download failed for $url" > "$filename"
-            }
-          done
-
-      - name: Merge all downloaded files into allinone.txt
-        run: |
-          echo "Merging all downloaded files into allinone.txt..."
-          > allinone.txt # 清空原有文件，避免内容重复
-          
-          # 循环合并所有生成的.txt文件（排除allinone.txt自身）
-          for txt_file in *.txt; do
-            if [ -f "$txt_file" ] && [ "$txt_file" != "allinone.txt" ]; then
-              # 写入分隔符，标注对应的原始URL（从文件名反向提示）
-              echo "========================================" >> allinone.txt
-              echo "Source URL (filename: $txt_file):" >> allinone.txt
-              echo "========================================" >> allinone.txt
-              cat "$txt_file" >> allinone.txt
-              echo -e "\n\n" >> allinone.txt # 空行分隔不同文件内容
+            # 下载URL内容到指定文件，失败时跳过该URL（避免整个流程中断）
+            echo "正在下载: $url -> $filename"
+            if wget -q -O "downloaded_files/$filename" "$url"; then
+              echo "下载成功: $filename"
+            else
+              echo "下载失败，跳过: $url"
+              rm -f "downloaded_files/$filename" # 删除空文件
             fi
           done
 
-      - name: Commit and push changes
+      # 步骤3：合并所有下载的文件到allinone.txt
+      - name: 合并文件到allinone.txt
         run: |
-          git config --global user.name "GitHub Action"
-          git config --global user.email "action@github.com"
+          # 清空旧的allinone.txt（如果存在）
+          > allinone.txt
           
-          # 检查allinone.txt是否有变更，避免空提交
-          if git status --porcelain | grep -q "allinone.txt"; then
-            git add allinone.txt
-            git commit -m "Update allinone.txt: $(date +'%Y-%m-%d %H:%M:%S')"
-            git push
-            echo "Successfully pushed allinone.txt to repository"
-          else
-            echo "No changes to allinone.txt, skip commit"
-          fi
+          # 写入合并说明（可选，方便查看）
+          echo "===== 合并时间: $(date '+%Y-%m-%d %H:%M:%S') =====" >> allinone.txt
+          echo "" >> allinone.txt
+          
+          # 循环合并每个下载的文件，添加分隔符便于区分
+          for file in downloaded_files/*.txt; do
+            if [ -f "$file" ]; then # 确保文件存在
+              echo "===== 来源文件: $(basename "$file") =====" >> allinone.txt
+              cat "$file" >> allinone.txt
+              echo -e "\n\n" >> allinone.txt # 每个文件内容后加空行分隔
+            fi
+          done
+          
+          # 删除临时目录（可选，避免提交无关文件）
+          rm -rf downloaded_files
+
+      # 步骤4：提交并推送allinone.txt到仓库
+      - name: 提交并推送文件
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 设置git提交的用户信息（GitHub Action需要）
+          GITHUB_USER: ${{ github.actor }}
+          GITHUB_EMAIL: ${{ github.actor }}@users.noreply.github.com
+        run: |
+          # 配置git用户
+          git config --global user.name "$GITHUB_USER"
+          git config --global user.email "$GITHUB_EMAIL"
+          
+          # 检查文件是否有变化（避免空提交）
+          if git status --porcelain | grep -q "allinone.txt"; then
+            # 提交文件
+            git add allinone.txt
+            git commit -m "自动更新：合并下载的文本文件 $(date '+%Y-%m-%d %H:%M:%S')"
+            # 推送提交到仓库
+            git push origin main # 如果你的主分支是master，替换为master
+            echo "文件已成功提交并推送"
+          else
+            echo "文件无变化，无需提交"
+          fi
