@@ -1,0 +1,98 @@
+name: Download and Allinone
+
+on:
+  schedule:
+    # 每30分钟触发一次（GitHub cron有±1分钟延迟）
+    - cron: '*/30 * * * *'
+  workflow_dispatch: # 手动触发，方便测试
+
+jobs:
+  download-merge-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download files with valid filenames
+        run: |
+          # 定义要下载的URL列表（可自行扩展，支持任意文本类型URL）
+          URLS=(
+            "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=cubesat&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=education&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=engineering&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=geo&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=globalstar&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=gnss&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=intelsat&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=iridium-NEXT&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=military&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=last-30-days&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=oneweb&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=orbcomm&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=resource&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=satnogs&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=science&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=spire&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=swarm&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle"
+			"https://celestrak.org/NORAD/elements/gp.php?GROUP=x-comm&FORMAT=tle"
+			"https://amsat.org/tle/current/nasabare.txt"
+			"https://r4uab.ru/satonline.txt"
+          )
+          
+          # 循环处理每个URL：生成合法文件名 → 下载文件
+          for url in "${URLS[@]}"; do
+            echo "Processing URL: $url"
+            
+            # 生成合法文件名：
+            # 1. 替换URL中的特殊字符（/、?、&、=、:等）为下划线
+            # 2. 末尾统一添加.txt后缀，确保是文本文件
+            filename=$(echo "$url" | sed -e 's/[\/\?\&\=\:\.]/_/g' -e 's/_\+/_/g' -e 's/^_//' -e 's/_$//').txt
+            
+            # 下载文件（失败重试3次，静默模式）
+            echo "Downloading to filename: $filename"
+            wget --quiet --tries=3 --output-document="$filename" "$url" || {
+              echo "Warning: Failed to download $url (saved to $filename)"
+              # 即使下载失败，也创建空文件避免后续合并报错
+              touch "$filename"
+              echo "Download failed for $url" > "$filename"
+            }
+          done
+
+      - name: Merge all downloaded files into allinone.txt
+        run: |
+          echo "Merging all downloaded files into allinone.txt..."
+          > allinone.txt # 清空原有文件，避免内容重复
+          
+          # 循环合并所有生成的.txt文件（排除allinone.txt自身）
+          for txt_file in *.txt; do
+            if [ -f "$txt_file" ] && [ "$txt_file" != "allinone.txt" ]; then
+              # 写入分隔符，标注对应的原始URL（从文件名反向提示）
+              echo "========================================" >> allinone.txt
+              echo "Source URL (filename: $txt_file):" >> allinone.txt
+              echo "========================================" >> allinone.txt
+              cat "$txt_file" >> allinone.txt
+              echo -e "\n\n" >> allinone.txt # 空行分隔不同文件内容
+            fi
+          done
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          
+          # 检查allinone.txt是否有变更，避免空提交
+          if git status --porcelain | grep -q "allinone.txt"; then
+            git add allinone.txt
+            git commit -m "Update allinone.txt: $(date +'%Y-%m-%d %H:%M:%S')"
+            git push
+            echo "Successfully pushed allinone.txt to repository"
+          else
+            echo "No changes to allinone.txt, skip commit"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
